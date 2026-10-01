@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -29,6 +30,46 @@ func main() {
 	err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
 	if err != nil {
 		fmt.Println("error publishing pause message: ", err)
+	}
+
+	gamelogic.PrintServerHelp()
+
+	_, _, err = pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug,
+		routing.GameLogSlug+".*",
+		pubsub.Durable,
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to game logs: %v", err)
+	}
+
+	for {
+		words := gamelogic.GetInput()
+		if len(words) == 0 {
+			continue
+		}
+
+		switch words[0] {
+		case "pause":
+			fmt.Println("Sending a pause message...")
+			err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: true})
+			if err != nil {
+				fmt.Println("error publishing pause message: ", err)
+			}
+		case "resume":
+			fmt.Println("Sending a resume message...")
+			err = pubsub.PublishJSON(channel, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{IsPaused: false})
+			if err != nil {
+				fmt.Println("error publishing pause message: ", err)
+			}
+		case "quit":
+			fmt.Println("Exiting...")
+			return
+		default:
+			fmt.Println("I don't understand the command")
+		}
 	}
 
 	// wait for ctrl+c
