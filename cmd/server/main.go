@@ -34,12 +34,13 @@ func main() {
 
 	gamelogic.PrintServerHelp()
 
-	_, _, err = pubsub.DeclareAndBind(
+	err = pubsub.SubscribeGob(
 		conn,
 		routing.ExchangePerilTopic,
-		routing.GameLogSlug,
-		routing.GameLogSlug+".*",
+		routing.GameLogSlug,      // очередь "game_logs"
+		routing.GameLogSlug+".*", // подстановочный знак: логи любого игрока
 		pubsub.Durable,
+		handlerLog(),
 	)
 	if err != nil {
 		log.Fatalf("could not subscribe to game logs: %v", err)
@@ -77,4 +78,16 @@ func main() {
 	signal.Notify(signalChan, os.Interrupt)
 	<-signalChan
 	fmt.Println("RabbitMQ connection closed.")
+}
+
+func handlerLog() func(routing.GameLog) pubsub.AckType {
+	return func(gl routing.GameLog) pubsub.AckType {
+		defer fmt.Print("> ")
+		err := gamelogic.WriteLog(gl)
+		if err != nil {
+			fmt.Println("could not write log:", err)
+			return pubsub.NackRequeue
+		}
+		return pubsub.Ack
+	}
 }
